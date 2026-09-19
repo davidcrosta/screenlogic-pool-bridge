@@ -27,7 +27,7 @@ if(process.send)process.once('message',async({options,action='read',value})=>{
     const c=new ScreenLogic.UnitConnection();c.netTimeout=7000;c.reconnectAsync=async()=>fail('connection_interrupted');
     c.init(options.system_name,gateway.ipAddr,gateway.port,options.password);await c.connectAsync();
     const read=async()=>poolSnapshot(await c.equipment.getControllerConfigAsync(),await c.equipment.getEquipmentStateAsync(),
-      await c.pumps.getPumpStatusAsync(options.pump_id),options);
+      await c.pump.getPumpStatusAsync(options.pump_id),options);
     const before=await read();
     if(action!=='read') {
       if(!options.allow_control||!permitted(action,value,before))return fail('command_rejected');
