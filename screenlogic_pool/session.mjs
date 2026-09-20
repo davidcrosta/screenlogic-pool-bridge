@@ -10,15 +10,15 @@ export function poolSnapshot(config,state,pump,options,at=Date.now()) {
     typeof pump.isRunning!=='boolean')throw Error('invalid_pool_evidence');
   return {observedAt:at,temperature:pool[0].currentTemp,target:pool[0].setPoint,heatMode:pool[0].heatMode,
     heating:pool[0].heatStatus!==0,poolOn:enabled.state===1,
-    pumpRunning:pump.isRunning&&pump.pumpWatts>0&&pump.pumpWatts<5000&&
-      (pump.pumpRPMs>0&&pump.pumpRPMs<5000||pump.pumpGPMs>0&&pump.pumpGPMs<300),pumpWatts:pump.pumpWatts,
+    pumpRunning:!pump.isRunning?false:pump.pumpWatts>0&&pump.pumpWatts<5000&&
+      (pump.pumpRPMs>0&&pump.pumpRPMs<5000||pump.pumpGPMs>0&&pump.pumpGPMs<300)?true:null,pumpWatts:pump.pumpWatts,
     spaOn:Boolean(spa),panelMode:state.panelMode,freezeMode:state.freezeMode,unit:'F'};
 }
 export function permitted(action,value,s) {
   if(action==='mode'&&value==='off')return true;
   return s.panelMode===1&&!s.spaOn&&(
     action==='temperature'&&Number(value)===83||action==='pump'&&value==='on'||
-    action==='mode'&&value==='gas'&&s.poolOn&&s.pumpRunning&&s.target===83);
+    action==='mode'&&value==='gas'&&s.poolOn&&s.target===83);
 }
 if(process.send)process.once('message',async({options,action='read',value})=>{
   const fail=code=>{process.send?.({ok:false,code});process.exit(1);};

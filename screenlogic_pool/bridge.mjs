@@ -50,12 +50,12 @@ client.on('connect',()=>{for(const p of options.pools){discovery(p);publish(`scr
   publish('screenlogic_pool/availability','online',true);client.subscribe('screenlogic_pool/+/set/+',{qos:0});
   options.pools.forEach(p=>void run(p));});
 client.on('message',(topic,payload,packet)=>{
-  if(packet.retain||!options.allow_control||payload.length>16)return;
+  if(packet.retain||payload.length>16)return;
   const [,id,,action]=topic.split('/'),p=options.pools.find(p=>p.id===id),value=payload.toString();
   if(p&&action==='automation'&&['on','off'].includes(value)){
     pauses[p.id]=value==='off';savePauses();pending.delete(p.id);publish(`screenlogic_pool/${id}/automation`,value);void run(p);return;
   }
-  if(p&&pauses[p.id]!==true&&(['mode','temperature','pump'].includes(action)))void run(p,action,value);
+  if(options.allow_control&&p&&pauses[p.id]!==true&&(['mode','temperature','pump'].includes(action)))void run(p,action,value);
 });
 client.on('error',()=>console.log('MQTT connection unavailable'));
 setInterval(()=>{if(client.connected)options.pools.forEach(p=>void run(p));},60000);
