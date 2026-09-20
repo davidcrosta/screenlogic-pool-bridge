@@ -9,7 +9,9 @@ export function poolSnapshot(config,state,pump,options,at=Date.now()) {
     !Number.isFinite(pool[0].setPoint)||![0,1,2,3].includes(pool[0].heatMode)||
     typeof pump.isRunning!=='boolean')throw Error('invalid_pool_evidence');
   return {observedAt:at,temperature:pool[0].currentTemp,target:pool[0].setPoint,heatMode:pool[0].heatMode,
-    heating:pool[0].heatStatus!==0,poolOn:enabled.state===1,pumpRunning:pump.isRunning,pumpWatts:pump.pumpWatts,
+    heating:pool[0].heatStatus!==0,poolOn:enabled.state===1,
+    pumpRunning:pump.isRunning&&pump.pumpWatts>0&&pump.pumpWatts<5000&&
+      (pump.pumpRPMs>0&&pump.pumpRPMs<5000||pump.pumpGPMs>0&&pump.pumpGPMs<300),pumpWatts:pump.pumpWatts,
     spaOn:Boolean(spa),panelMode:state.panelMode,freezeMode:state.freezeMode,unit:'F'};
 }
 export function permitted(action,value,s) {
