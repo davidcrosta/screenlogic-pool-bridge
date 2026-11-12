@@ -1,5 +1,25 @@
 // Isolated bounded session: no library reconnect, command retry or startup writes.
 import ScreenLogic from 'node-screenlogic';
+import { lightCircuits, lightStates } from './lighting.mjs';
+
+export async function switchLights(client, config, before, options, action, value) {
+  const keys = action === 'lights' ? Object.keys(lightCircuits) : [action];
+  const current = lightStates(config, before, options);
+  if (!options.allow_lighting || before.panelMode !== 1 ||
+      !['on', 'off'].includes(value) || keys.every(key => !current[key])) {
+    throw Error('lighting_rejected');
+  }
+  for (const key of keys) {
+    if (!current[key] || current[key] === value) continue;
+    try {
+      await client.circuits.setCircuitStateAsync(options[lightCircuits[key].option], value === 'on');
+    } catch {
+      // Continue with the other mapped circuit. Only fresh controller state counts.
+    }
+  }
+  const lights = lightStates(config, await client.equipment.getEquipmentStateAsync(), options);
+  return { lights, incomplete: keys.some(key => lights[key] !== value) };
+}
 export function poolSnapshot(config,state,pump,options,at=Date.now()) {
   const pool=state.bodies?.filter(b=>b.id===1),circuit=config.circuitArray?.filter(c=>c.circuitId===options.pool_circuit&&c.function===2);
   const enabled=state.circuitArray?.find(c=>c.id===options.pool_circuit);
@@ -28,15 +48,24 @@ if(process.send)process.once('message',async({options,action='read',value})=>{
     if(!gateway.gatewayFound||!gateway.ipAddr||!Number.isInteger(gateway.port))return fail('gateway_unavailable');
     const c=new ScreenLogic.UnitConnection();c.netTimeout=7000;c.reconnectAsync=async()=>fail('connection_interrupted');
     c.init(options.system_name,gateway.ipAddr,gateway.port,options.password);await c.connectAsync();
-    const read=async()=>poolSnapshot(await c.equipment.getControllerConfigAsync(),await c.equipment.getEquipmentStateAsync(),
-      await c.pump.getPumpStatusAsync(options.pump_id),options);
+    if(action==='lights'||Object.hasOwn(lightCircuits,action)){
+      const config=await c.equipment.getControllerConfigAsync();
+      const result=await switchLights(c,config,await c.equipment.getEquipmentStateAsync(),options,action,value);
+      process.send?.({ok:true,...result});process.exit(0);
+    }
+    const read=async()=>{
+      const config=await c.equipment.getControllerConfigAsync();
+      const state=await c.equipment.getEquipmentStateAsync();
+      return {snapshot:poolSnapshot(config,state,await c.pump.getPumpStatusAsync(options.pump_id),options),
+        lights:lightStates(config,state,options)};
+    };
     const before=await read();
     if(action!=='read') {
-      if(!options.allow_control||!permitted(action,value,before))return fail('command_rejected');
+      if(!options.allow_control||!permitted(action,value,before.snapshot))return fail('command_rejected');
       if(action==='temperature')await c.bodies.setSetPointAsync(0,83);
       else if(action==='mode')await c.bodies.setHeatModeAsync(0,value==='off'?0:3);
       else if(action==='pump')await c.circuits.setCircuitStateAsync(options.pool_circuit,true);
     }
-    process.send?.({ok:true,snapshot:action==='read'?before:await read()});process.exit(0);
+    process.send?.({ok:true,...(action==='read'?before:await read())});process.exit(0);
   }catch{fail(action==='read'?'read_failed':'command_uncertain');}
 });

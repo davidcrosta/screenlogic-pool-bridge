@@ -1,7 +1,7 @@
 name: ScreenLogic Pool Bridge
-version: "1.0.2"
+version: "1.0.3"
 slug: screenlogic_pool
-description: Remote pool-only ScreenLogic connection using node-screenlogic
+description: Remote ScreenLogic pool equipment and optional lighting controls
 arch: [aarch64, amd64]
 startup: application
 boot: auto
@@ -19,3 +19,8 @@ schema:
       password: password
       pool_circuit: int(1,255)
       pump_id: int(1,8)
+      pool_light_circuit: int(1,255)?
+      spa_light_circuit: int(1,255)?
+  lighting_latitude: float(-90,90)?
+  lighting_longitude: float(-180,180)?
+  lighting_time_zone: str?

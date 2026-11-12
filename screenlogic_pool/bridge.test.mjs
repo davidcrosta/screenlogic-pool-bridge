@@ -1,19 +1,22 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';import vm from 'node:vm';import {EventEmitter} from 'node:events';
+import { lightCircuits, nextLightingTimes } from './lighting.mjs';
 
 // Execute the actual bridge body in a private context. Only imports and
 // import.meta's module URL are supplied by this harness; no device or broker.
 const source=readFileSync(new URL('./bridge.mjs',import.meta.url),'utf8');
-const imports=source.match(/^import .*;$/gm);assert.equal(imports.length,3);
+const imports=source.match(/^import .*;$/gm);assert.equal(imports.length,4);
 const body=source.replace(/^import .*;\n/gm,'').replaceAll('import.meta.url','moduleUrl');
 const flush=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
-async function fixture(saved={},allow=true){
+async function fixture(saved={},allow=true,lighting=false){
  let now=1000000,nextTimer=0,fetches=0;const timers=new Map(),intervals=[],children=[],published=[],disk=new Map(),writes=[];
  const pools=[{id:'2033',system_name:'Pentair: AA-BB-CC'},{id:'2070',system_name:'Pentair: DD-EE-FF'}];
+ if(lighting)Object.assign(pools[0],{pool_light_circuit:4,spa_light_circuit:5});
  disk.set('/data/options.json',JSON.stringify({pools,allow_control:allow}));disk.set('/data/pauses.json',JSON.stringify(saved));
  const client=Object.assign(new EventEmitter(),{connected:true,publish:(topic,payload,options)=>published.push({topic,payload,options}),subscribe:()=>{},end:(_force,cb)=>cb()});
  const process=Object.assign(new EventEmitter(),{env:{SUPERVISOR_TOKEN:'synthetic'},exit:()=>{}});
  const context={moduleUrl:new URL('./bridge.mjs',import.meta.url).href,URL,Buffer,console:{log:()=>{}},process,
+  lightCircuits,nextLightingTimes,
   Date:class extends Date{static now(){return now;}},
   readFileSync:p=>{assert.ok(disk.has(p),'unexpected file read');return disk.get(p);},existsSync:p=>disk.has(p),
   writeFileSync:(p,v,options)=>{assert.equal(options.mode,0o600);writes.push(p);disk.set(p,v);},
@@ -47,6 +50,17 @@ test('per-home busy queue keeps first pending command and drops later ones',asyn
  assert.equal(x.children[2].payload.options.id,'2070');assert.equal(x.children[2].payload.action,'mode');
  await x.finish(x.children[0]);assert.equal(x.children[3].payload.action,'temperature');assert.equal(x.children[3].payload.value,'83');
  await x.finish(x.children[3]);assert.equal(x.children.length,4);
+});
+test('a lighting pair and the existing equipment command each retain their pending slot',async()=>{
+ const x=await fixture({},true,true);await x.connect();
+ await x.command('2033','lights','on');await x.command('2033','mode','off');
+ await x.finish(x.children[0]);assert.equal(x.children[2].payload.action,'mode');
+ await x.finish(x.children[2]);assert.equal(x.children[3].payload.action,'lights');
+ assert.equal(x.children[3].payload.options.allow_lighting,true);
+ x.children[3].emit('message',{ok:true,lights:{pool_light:'on',spa_light:'off'},incomplete:true});await flush();
+ assert.equal(x.published.findLast(p=>p.topic==='screenlogic_pool/2033/pool_light').payload,'on');
+ assert.equal(x.published.findLast(p=>p.topic==='screenlogic_pool/2033/spa_light').payload,'off');
+ assert.equal(x.published.filter(p=>p.topic==='screenlogic_pool/2033/state').length,2);
 });
 for(const ms of [29999,30000])test('pending command expiry boundary '+ms,async()=>{
  const x=await fixture();await x.connect();await x.command('2033','mode','gas');
