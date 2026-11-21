@@ -11,12 +11,17 @@ test('pool decoding excludes spa and refuses incorrect circuit or units',()=>{
   assert.throws(()=>poolSnapshot({...config,degC:true},state,pump,{pool_circuit:6}));
   assert.equal(poolSnapshot(config,state,{...pump,pumpWatts:0}, {pool_circuit:6}).pumpRunning,null);
 });
-test('only 83F, heat off/gas and pool circulation on can be commanded',()=>{
+test('only 83F and 88F, heat off/gas and pool circulation on can be commanded',()=>{
   const s=poolSnapshot(config,state,pump,{pool_circuit:6});
   assert.equal(permitted('mode','gas',s),true);assert.equal(permitted('temperature','83',s),true);
-  assert.equal(permitted('temperature','84',s),false);assert.equal(permitted('pump','off',s),false);
+  assert.equal(permitted('temperature','88.0',s),true);
+  assert.equal(permitted('mode','gas',{...s,target:88}),true);
+  for(const value of ['84','87','89','88.1',' 88','8.8e1'])assert.equal(permitted('temperature',value,s),false);
+  assert.equal(permitted('mode','gas',{...s,target:87}),false);
+  assert.equal(permitted('pump','off',s),false);
   assert.equal(permitted('mode','gas',{...s,poolOn:false}),false);
   assert.equal(permitted('mode','gas',{...s,spaOn:true}),false);
   assert.equal(permitted('pump','on',{...s,spaOn:true}),false);
+  assert.equal(permitted('temperature','88',{...s,spaOn:true}),false);
   assert.equal(permitted('mode','off',{...s,spaOn:true}),true);
 });

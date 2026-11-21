@@ -37,8 +37,8 @@ export function poolSnapshot(config,state,pump,options,at=Date.now()) {
 export function permitted(action,value,s) {
   if(action==='mode'&&value==='off')return true;
   return s.panelMode===1&&!s.spaOn&&(
-    action==='temperature'&&Number(value)===83||action==='pump'&&value==='on'||
-    action==='mode'&&value==='gas'&&s.poolOn&&s.target===83);
+    action==='temperature'&&/^(83|88)(\.0+)?$/.test(value)||action==='pump'&&value==='on'||
+    action==='mode'&&value==='gas'&&s.poolOn&&[83,88].includes(s.target));
 }
 if(process.send)process.once('message',async({options,action='read',value})=>{
   const fail=code=>{process.send?.({ok:false,code});process.exit(1);};
@@ -62,7 +62,7 @@ if(process.send)process.once('message',async({options,action='read',value})=>{
     const before=await read();
     if(action!=='read') {
       if(!options.allow_control||!permitted(action,value,before.snapshot))return fail('command_rejected');
-      if(action==='temperature')await c.bodies.setSetPointAsync(0,83);
+      if(action==='temperature')await c.bodies.setSetPointAsync(0,Number(value));
       else if(action==='mode')await c.bodies.setHeatModeAsync(0,value==='off'?0:3);
       else if(action==='pump')await c.circuits.setCircuitStateAsync(options.pool_circuit,true);
     }
