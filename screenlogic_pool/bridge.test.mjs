@@ -106,3 +106,12 @@ test('the optional schedule read is read-only, follows a healthy poll and cannot
   forecast.emit('message',{ok:false,code:'connection_timeout'});await flush();
   assert.equal(f.published.length,count);
 });
+
+test('both native heater selectors advertise the approved whole-degree range',async()=>{
+ const x=await fixture();await x.connect();
+ for(const id of ['2033','2070']){
+  const topic='homeassistant/water_heater/pool_'+id+'_heater/config';
+  const config=JSON.parse(x.published.find(p=>p.topic===topic).payload);
+  assert.deepEqual([config.min_temp,config.max_temp,config.precision],[83,89,1]);
+ }
+});

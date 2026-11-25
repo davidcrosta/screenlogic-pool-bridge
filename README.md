@@ -2,7 +2,7 @@
 
 Home Assistant app using node-screenlogic 2.1.1 remote connections and native
 MQTT discovery. Requires the official Mosquitto app. It exposes pool
-readings, an 83°F heater target, heat on/off, pool circulation on, and
+readings, whole-degree heater targets from 83°F through 89°F, heat on/off, pool circulation on, and
 optionally individual Pool Light and Spa Light switches.
 
 Configure two pools with a private remote system name/password, unique four-digit

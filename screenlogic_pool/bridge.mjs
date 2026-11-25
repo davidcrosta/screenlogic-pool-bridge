@@ -50,7 +50,7 @@ function discovery(p) {
   const common={device,availability:[{topic:'screenlogic_pool/availability'},{topic:`${base}/available`}],availability_mode:'all'};
   for(const [domain,key,specific] of [
     ['sensor','status',{state_topic:`${base}/state`,value_template:'{{ value_json.observedAt }}',json_attributes_topic:`${base}/state`,expire_after:180}],
-    ['water_heater','heater',{temperature_unit:'F',min_temp:83,max_temp:88,precision:1,modes:['off','gas'],optimistic:false,retain:false,qos:0,
+    ['water_heater','heater',{temperature_unit:'F',min_temp:83,max_temp:89,precision:1,modes:['off','gas'],optimistic:false,retain:false,qos:0,
       mode_state_topic:`${base}/mode`,mode_command_topic:`${base}/set/mode`,temperature_state_topic:`${base}/target`,
       temperature_command_topic:`${base}/set/temperature`,current_temperature_topic:`${base}/temperature`}],
     ['button','circulation',{command_topic:`${base}/set/pump`,payload_press:'on',retain:false,qos:0}]

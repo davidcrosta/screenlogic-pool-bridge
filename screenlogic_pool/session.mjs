@@ -50,8 +50,8 @@ export function poolSnapshot(config,state,pump,options,at=Date.now()) {
 export function permitted(action,value,s) {
   if(action==='mode'&&value==='off')return true;
   return s.panelMode===1&&s.spaKnown===true&&!s.spaOn&&s.motorFeedback!=='unavailable'&&(
-    action==='temperature'&&/^(83|88)(\.0+)?$/.test(value)||action==='pump'&&value==='on'||
-    action==='mode'&&value==='gas'&&s.poolOn&&s.pumpRunning!==false&&[83,88].includes(s.target));
+    action==='temperature'&&/^8[3-9](\.0+)?$/.test(value)||action==='pump'&&value==='on'||
+    action==='mode'&&value==='gas'&&s.poolOn&&s.pumpRunning!==false&&Number.isInteger(s.target)&&s.target>=83&&s.target<=89);
 }
 if(process.send)process.once('message',async({options,action='read',value})=>{
   const fail=code=>{process.send?.({ok:false,code});process.exit(1);};
