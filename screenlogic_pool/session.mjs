@@ -22,8 +22,8 @@ export async function switchLights(client, config, before, options, action, valu
   return { lights, incomplete: keys.some(key => lights[key] !== value) };
 }
 export function poolSnapshot(config,state,pump,options,at=Date.now()) {
-  const pool=state.bodies?.filter(b=>b.id===1),circuit=config.circuitArray?.filter(c=>c.circuitId===options.pool_circuit&&c.function===2);
-  const enabled=state.circuitArray?.find(c=>c.id===options.pool_circuit);
+  const pool=state.bodies?.filter(b=>b.id===1),circuit=config.circuitArray?.filter(c=>c.circuitId===options.pool_circuit);
+  const enabled=state.circuitArray?.filter(c=>c.id===options.pool_circuit);
   const spaCircuits=config.circuitArray?.filter(c=>c.function===1)??[];
   const spaStates=spaCircuits.flatMap(c=>state.circuitArray?.filter(s=>s.id===c.circuitId)??[]);
   const spaKnown=spaCircuits.length===1&&spaStates.length===1&&[0,1].includes(spaStates[0].state);
@@ -31,17 +31,17 @@ export function poolSnapshot(config,state,pump,options,at=Date.now()) {
   const spa=spaBody?.length===1?spaBody[0]:null;
   const validWater=value=>Number.isFinite(value)&&value>=32&&value<=110;
   const metric=(value,max)=>Number.isFinite(value)&&value>=0&&value<max?value:null;
-  const pumpWatts=metric(pump?.pumpWatts,5000),pumpRpm=metric(pump?.pumpRPMs,5000),pumpGpm=metric(pump?.pumpGPMs,300);
-  const pumpRunning=pump?.isRunning===false&&!(pumpWatts>0||pumpRpm>0||pumpGpm>0)?false:
+  const pumpWatts=metric(pump?.pumpWatts,5000),pumpRpm=metric(pump?.pumpRPMs,5000),pumpGpm=metric(pump?.pumpGPMs,255);
+  const pumpRunning=pump?.isRunning===false&&pumpWatts===0&&pumpRpm===0&&!(pumpGpm>0)?false:
     pump?.isRunning===true&&pumpWatts>0&&(pumpRpm>0||pumpGpm>0)?true:null;
   const motorFeedback=pumpRunning!==null?'available':options.id==='2070'&&pump?.isRunning===true&&
-    pumpWatts===0&&pumpRpm===0&&pumpGpm===null?'unsupported':'unavailable';
-  if(config.degC!==false||pool?.length!==1||circuit?.length!==1||![0,1].includes(enabled?.state)||
+    pumpWatts===0&&pumpRpm===0&&[255,0xffffffff].includes(pump.pumpGPMs)?'unsupported':'unavailable';
+  if(config.degC!==false||pool?.length!==1||circuit?.length!==1||circuit[0].function!==2||enabled?.length!==1||![0,1].includes(enabled[0].state)||
     !Number.isFinite(pool[0].currentTemp)||pool[0].currentTemp<32||pool[0].currentTemp>110||
-    !Number.isFinite(pool[0].setPoint)||![0,1,2,3].includes(pool[0].heatMode)||
+    !validWater(pool[0].setPoint)||![0,1,2,3].includes(pool[0].heatMode)||
     !Number.isInteger(pool[0].heatStatus)||!Number.isInteger(state.panelMode))throw Error('invalid_pool_evidence');
   return {observedAt:at,temperature:pool[0].currentTemp,target:pool[0].setPoint,heatMode:pool[0].heatMode,
-    heating:pool[0].heatStatus!==0,poolOn:enabled.state===1,
+    heating:pool[0].heatStatus!==0,poolOn:enabled[0].state===1,
     pumpRunning,motorFeedback,pumpWatts,pumpRpm,pumpGpm,pumpType:pump?.pumpType??null,
     spaOn:!spaKnown||spaStates[0].state===1,spaKnown,panelMode:state.panelMode,freezeMode:state.freezeMode,unit:'F',
     ...(spaKnown&&spaStates[0].state===1&&spa&&validWater(spa.currentTemp)&&validWater(spa.setPoint)&&Number.isInteger(spa.heatStatus)?
@@ -87,7 +87,7 @@ if(process.send)process.once('message',async({options,action='read',value})=>{
       if(!options.allow_control||!permitted(action,value,before.snapshot))return fail('command_rejected');
       if(action==='temperature')await c.bodies.setSetPointAsync(0,Number(value));
       else if(action==='mode')await c.bodies.setHeatModeAsync(0,value==='off'?0:3);
-      else if(action==='pump')await c.circuits.setCircuitStateAsync(options.pool_circuit,true);
+      else if(action==='pump'&&!before.snapshot.poolOn)await c.circuits.setCircuitStateAsync(options.pool_circuit,true);
     }
     process.send?.({ok:true,...(action==='read'?before:await read())});process.exit(0);
   }catch{fail(action==='read'?'read_failed':'command_uncertain');}

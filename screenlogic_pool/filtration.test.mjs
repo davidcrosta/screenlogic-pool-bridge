@@ -15,3 +15,17 @@ test('next verified recurring Pool forecast uses Pacific wall time and controlle
     assert.equal(filtrationForecast(clock,[{...run,...change}],[],6,observedAt).startAt,null);
   assert.equal(filtrationForecast({...clock,minute:30},[run],[],6,observedAt).startAt,null);
 });
+
+test('a schedule read during filtration retains the current run through its stop',()=>{
+  const now=observedAt+2*3600000;
+  const f=filtrationForecast({...clock,hour:7},[run],[],6,now);
+  assert.equal(f.startAt,Date.parse('2026-11-25T13:58:00Z'));
+  assert.equal(f.endAt,Date.parse('2026-11-25T21:58:00Z'));
+});
+
+test('overlapping or adjoining timers cannot establish a unique scheduled stop',()=>{
+  for(const startTime of ['1000','1400']){
+    const extra={...run,startTime,stopTime:'1600'};
+    assert.equal(filtrationForecast(clock,[run,extra],[],6,observedAt).startAt,null);
+  }
+});

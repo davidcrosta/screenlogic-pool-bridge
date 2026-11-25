@@ -75,13 +75,14 @@ async function run(p,action='read',value) {
     return;
   }
   busy.add(p.id);
+  let equipmentReadSucceeded=false;
   try {
     const result=await new Promise(resolve=>{
       const child=fork(new URL('./session.mjs',import.meta.url),[],{stdio:['ignore','ignore','ignore','ipc']});let done=false;
       const finish=r=>{if(done)return;done=true;clearTimeout(timer);child.kill();resolve(r);};
       const timer=setTimeout(()=>finish({ok:false,code:'session_timeout'}),28000);
       child.once('message',finish);child.once('exit',()=>finish({ok:false,code:'session_failed'}));
-      child.send({options:{...p,allow_control:options.allow_control===true&&pauses[p.id]!==true,
+      child.send({options:{...p,allow_control:action!=='filtration'&&options.allow_control===true&&pauses[p.id]!==true,
         allow_lighting:lighting&&options.allow_control===true},action,value});
     });
     const base=`screenlogic_pool/${p.id}`;
@@ -90,6 +91,7 @@ async function run(p,action='read',value) {
       else filtrationByHome.delete(p.id);
       return;
     }
+    equipmentReadSucceeded=action==='read'&&result.ok===true;
     if(action==='read'||lighting)publishLights(p,result.lights);
     if(lighting){
       if(!result.ok||result.incomplete)console.log(JSON.stringify({pool:p.id,action,code:result.code??'lighting_unconfirmed'}));
@@ -103,7 +105,7 @@ async function run(p,action='read',value) {
       const next=queue.get(p.id);queue.delete(p.id);
       if(next&&Date.now()-next.at<30000){void run(p,next.action,next.value);break;}
     }
-    if(action==='read'&&!busy.has(p.id)&&Date.now()-(filtrationCheckedAt.get(p.id)??0)>=10*60000){
+    if(equipmentReadSucceeded&&!busy.has(p.id)&&Date.now()-(filtrationCheckedAt.get(p.id)??0)>=10*60000){
       filtrationCheckedAt.set(p.id,Date.now());void run(p,'filtration');
     }
   }

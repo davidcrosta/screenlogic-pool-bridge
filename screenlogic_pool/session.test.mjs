@@ -41,3 +41,21 @@ test('motor telemetry can fail without losing the equipment read, and unavailabl
   assert.equal(unknown.spaKnown,false);assert.equal(permitted('pump','on',unknown),false);
   assert.equal(permitted('mode','off',unknown),true);
 });
+
+test('recorded Villa and Estate pump frames with 255 flow cannot report 255 GPM',()=>{
+  const villa={isRunning:true,pumpGPMs:255,pumpRPMs:0,pumpWatts:0};
+  const read=(frame,id)=>poolSnapshot(config,state,frame,{pool_circuit:6,id});
+  const v=read(villa,'2070');assert.equal(v.motorFeedback,'unsupported');assert.equal(v.pumpRunning,null);
+  assert.equal(v.pumpGpm,null);assert.equal(permitted('mode','gas',v),true);
+  const e=read({...villa,pumpRPMs:2500,pumpWatts:965},'2033');
+  assert.equal(e.motorFeedback,'available');assert.equal(e.pumpGpm,null);assert.equal(e.pumpRunning,true);
+  assert.equal(read({...villa,pumpGPMs:undefined},'2070').motorFeedback,'unavailable');
+  assert.equal(read({isRunning:false},'2033').pumpRunning,null);
+  assert.throws(()=>poolSnapshot(config,{...state,bodies:[{...state.bodies[0],setPoint:0}]},pump,{pool_circuit:6}));
+});
+
+test('ambiguous Pool circuit mappings or observations cannot authorize writes',()=>{
+  const options={pool_circuit:6};
+  assert.throws(()=>poolSnapshot({...config,circuitArray:[...config.circuitArray,{circuitId:6,function:1}]},state,pump,options));
+  assert.throws(()=>poolSnapshot(config,{...state,circuitArray:[...state.circuitArray,{id:6,state:0}]},pump,options));
+});

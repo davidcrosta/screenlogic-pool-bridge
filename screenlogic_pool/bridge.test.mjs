@@ -93,3 +93,16 @@ for(const end of ['success','exit','timeout'])test('child '+end+' settles once w
  const available=x.published.filter(p=>p.topic.endsWith('/available'));assert.equal(available.length,1);
  assert.equal(available[0].payload,end==='success'?'online':'offline');
 });
+
+test('the optional schedule read is read-only, follows a healthy poll and cannot take the house offline',async()=>{
+  const f=await fixture();await f.connect();await Promise.all(f.children.map(f.finish));
+  await f.advance(60000);f.intervals[0]();await flush();
+  const [estate,villa]=f.children.slice(2);
+  villa.emit('message',{ok:false,code:'offline'});await flush();await f.finish(estate);
+  const schedules=f.children.filter(c=>c.payload.action==='filtration');
+  assert.equal(schedules.length,1);const forecast=schedules[0];
+  assert.equal(forecast.payload.options.id,'2033');assert.equal(forecast.payload.options.allow_control,false);
+  const count=f.published.length;
+  forecast.emit('message',{ok:false,code:'connection_timeout'});await flush();
+  assert.equal(f.published.length,count);
+});

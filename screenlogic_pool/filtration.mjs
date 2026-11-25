@@ -31,12 +31,15 @@ export function filtrationForecast(clock,recurring,once,circuit,observedAt) {
     const dayBit=1<<((weekday+6)%7); // Pentair's first day bit is Monday.
     for(const event of entries.filter(event=>event.dayMask&dayBit)){
       const startWall=date+minute(event.startTime)*60000,endWall=date+minute(event.stopTime)*60000;
-      if(startWall<=wall)continue;
+      if(endWall<=wall)continue;
       const startAt=observedAt+startWall-wall,endAt=observedAt+endWall-wall;
-      if(pacificWall(startAt)+drift!==startWall||pacificWall(endAt)+drift!==endWall)continue;
+      if(pacificWall(startAt)+drift!==startWall||pacificWall(endAt)+drift!==endWall)return result;
       windows.push({startAt,endAt});
     }
     if(windows.length)break;
   }
-  return {...result,...windows.sort((a,b)=>a.startAt-b.startAt||a.endAt-b.endAt)[0]};
+  windows.sort((a,b)=>a.startAt-b.startAt);
+  const [first,next]=windows;
+  if(!first||next&&next.startAt<=first.endAt)return result;
+  return {...result,...first};
 }
