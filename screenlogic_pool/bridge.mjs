@@ -13,6 +13,7 @@ const b=service.data;
 const client=mqtt.connect(`mqtt://${b.host}:${b.port}`,{username:b.username,password:b.password,clientId:'screenlogic-pool-bridge',
   clean:true,queueQoSZero:false,reconnectPeriod:5000,will:{topic:'screenlogic_pool/availability',payload:'offline',qos:0,retain:true}});
 const busy=new Set(),pending=new Map(),pendingLighting=new Map();
+const filtrationByHome=new Map(),filtrationCheckedAt=new Map(options.pools.map(p=>[p.id,Date.now()-9*60000]));
 const publish=(topic,data,retain=false)=>{if(client.connected)client.publish(topic,typeof data==='string'?data:JSON.stringify(data),{qos:0,retain});};
 const lightingEnabled=Number.isFinite(options.lighting_latitude)&&Number.isFinite(options.lighting_longitude)&&
   typeof options.lighting_time_zone==='string';
@@ -70,7 +71,7 @@ async function run(p,action='read',value) {
   const lighting=lightActions.includes(action);
   if(busy.has(p.id)){
     const queue=lighting?pendingLighting:pending;
-    if(action!=='read'&&!queue.has(p.id))queue.set(p.id,{action,value,at:Date.now()});
+    if(!['read','filtration'].includes(action)&&!queue.has(p.id))queue.set(p.id,{action,value,at:Date.now()});
     return;
   }
   busy.add(p.id);
@@ -84,10 +85,15 @@ async function run(p,action='read',value) {
         allow_lighting:lighting&&options.allow_control===true},action,value});
     });
     const base=`screenlogic_pool/${p.id}`;
+    if(action==='filtration'){
+      if(result.ok&&result.filtration)filtrationByHome.set(p.id,result.filtration);
+      else filtrationByHome.delete(p.id);
+      return;
+    }
     if(action==='read'||lighting)publishLights(p,result.lights);
     if(lighting){
       if(!result.ok||result.incomplete)console.log(JSON.stringify({pool:p.id,action,code:result.code??'lighting_unconfirmed'}));
-    }else if(result.ok){const s={...result.snapshot,paused:pauses[p.id]===true};publish(`${base}/state`,s);publish(`${base}/temperature`,String(s.temperature));
+    }else if(result.ok){const s={...result.snapshot,filtration:filtrationByHome.get(p.id)??null,paused:pauses[p.id]===true};publish(`${base}/state`,s);publish(`${base}/temperature`,String(s.temperature));
       publish(`${base}/automation`,s.paused?'off':'on');
       publish(`${base}/target`,String(s.target));publish(`${base}/mode`,s.heatMode===0?'off':'gas');publish(`${base}/available`,'online');}
     else {publish(`${base}/available`,'offline');console.log(JSON.stringify({pool:p.id,action,code:result.code}));}
@@ -96,6 +102,9 @@ async function run(p,action='read',value) {
     for(const queue of [pending,pendingLighting]){
       const next=queue.get(p.id);queue.delete(p.id);
       if(next&&Date.now()-next.at<30000){void run(p,next.action,next.value);break;}
+    }
+    if(action==='read'&&!busy.has(p.id)&&Date.now()-(filtrationCheckedAt.get(p.id)??0)>=10*60000){
+      filtrationCheckedAt.set(p.id,Date.now());void run(p,'filtration');
     }
   }
 }

@@ -25,3 +25,19 @@ test('only 83F and 88F, heat off/gas and pool circulation on can be commanded',(
   assert.equal(permitted('temperature','88',{...s,spaOn:true}),false);
   assert.equal(permitted('mode','off',{...s,spaOn:true}),true);
 });
+test('motor telemetry can fail without losing the equipment read, and unavailable is distinct from Villa unsupported',()=>{
+  const absent=poolSnapshot(config,state,null,{id:'2033',pool_circuit:6},1234);
+  assert.equal(absent.observedAt,1234);assert.equal(absent.poolOn,true);
+  assert.equal(absent.pumpRunning,null);assert.equal(absent.motorFeedback,'unavailable');
+  assert.equal(permitted('mode','gas',absent),false);
+  const report={isRunning:true,pumpWatts:0,pumpRPMs:0,pumpGPMs:4294967295};
+  const villa=poolSnapshot(config,state,report,{id:'2070',pool_circuit:6});
+  assert.equal(villa.motorFeedback,'unsupported');assert.equal(villa.pumpGpm,null);
+  assert.equal(permitted('mode','gas',villa),true);
+  assert.equal(poolSnapshot(config,state,report,{id:'2033',pool_circuit:6}).motorFeedback,'unavailable');
+  const spa=poolSnapshot(config,{...state,circuitArray:[{id:6,state:1},{id:1,state:1}]},pump,{pool_circuit:6});
+  assert.deepEqual(spa.spa,{temperature:100,target:104,heating:true});
+  const unknown=poolSnapshot(config,{...state,circuitArray:[{id:6,state:1}]},pump,{pool_circuit:6});
+  assert.equal(unknown.spaKnown,false);assert.equal(permitted('pump','on',unknown),false);
+  assert.equal(permitted('mode','off',unknown),true);
+});

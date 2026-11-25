@@ -1,5 +1,5 @@
 name: ScreenLogic Pool Bridge
-version: "1.0.4"
+version: "1.0.5"
 slug: screenlogic_pool
 description: Remote ScreenLogic pool equipment and optional lighting controls
 arch: [aarch64, amd64]
